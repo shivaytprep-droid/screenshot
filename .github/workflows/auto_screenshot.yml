@@ -30,9 +30,12 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
-          playwright install chromium
+          playwright install chromium --with-deps
 
       - name: Run Continuous Screenshot Loop (1 Hour)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python script.py
 
       - name: Auto-Trigger Next Run Immediately
