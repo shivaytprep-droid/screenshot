@@ -9,7 +9,6 @@ permissions:
   contents: write
   actions: write
 
-# Ek samay par sirf ek hi workflow chalega, duplicate nahi honge
 concurrency:
   group: screenshot-runner
   cancel-in-progress: false
