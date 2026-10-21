@@ -6,12 +6,11 @@ from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 
 # ==========================================
-# YAHAN APNA TELEGRAM TOKEN AUR CHAT ID DALEIN
+# APNA TELEGRAM BOT TOKEN AUR CHAT ID YAHAN DALEIN
 # ==========================================
 TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN"
 TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
 
-# Indian Standard Time (IST = UTC + 5:30)
 IST = timezone(timedelta(hours=5, minutes=30))
 
 def send_to_telegram(file_path, caption):
@@ -25,20 +24,24 @@ def send_to_telegram(file_path, caption):
             files = {'photo': photo}
             r = requests.post(url, data=payload, files=files, timeout=30)
             if r.status_code == 200:
-                print("Telegram par screenshot bhej diya gaya!")
+                print("Telegram par photo bhej di gayi!")
             else:
-                print(f"Telegram API Error: {r.text}")
+                print(f"Telegram Error: {r.text}")
     except Exception as e:
-        print(f"Telegram fail ho gaya: {e}")
+        print(f"Telegram fail: {e}")
 
 def open_correct_page(page, target_url):
-    link = page.locator("a[href*='dashboard_deviceListOnly.php']")
-    if link.count() > 0:
-        link.first.click(force=True)
-        page.wait_for_load_state('networkidle', timeout=60000)
-        time.sleep(5)
-    else:
-        page.evaluate(f"window.location.href = '{target_url}';")
+    # Har baar seedha target URL ya menu link open karna (Reload bilkul nahi karna)
+    page.goto(target_url, wait_until='networkidle', timeout=60000)
+    time.sleep(4)
+
+    # Agar abhi bhi Summary page par hai, to menu link ya JS se force open karo
+    if page.locator("text=Section wise summary").is_visible():
+        link = page.locator("a[href*='dashboard_deviceListOnly.php']")
+        if link.count() > 0:
+            link.first.click(force=True)
+        else:
+            page.evaluate(f"window.location.href = '{target_url}';")
         page.wait_for_load_state('networkidle', timeout=60000)
         time.sleep(5)
 
@@ -50,9 +53,8 @@ def open_correct_page(page, target_url):
             sub_link = page.locator("a[href*='deviceList']")
             if sub_link.count() > 0:
                 sub_link.first.click()
-            else:
-                page.goto(target_url, wait_until='networkidle')
-        time.sleep(5)
+                page.wait_for_load_state('networkidle', timeout=60000)
+                time.sleep(5)
 
 def push_to_github(file_path):
     try:
@@ -60,9 +62,9 @@ def push_to_github(file_path):
         subprocess.run(["git", "config", "--global", "user.email", "github-actions[bot]@users.noreply.github.com"], check=False)
         subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=False)
         subprocess.run(["git", "add", file_path], check=False)
-        subprocess.run(["git", "commit", "-m", f"Auto screenshot: {file_path}"], check=False)
+        subprocess.run(["git", "commit", "-m", f"Added: {file_path}"], check=False)
         subprocess.run(["git", "push", "origin", "main"], check=False)
-        print(f"GitHub par datewise folder me upload ho gaya: {file_path}")
+        print(f"GitHub folder me save ho gaya: {file_path}")
     except Exception as e:
         print(f"Git push error: {e}")
 
@@ -98,35 +100,27 @@ def run():
                     page.wait_for_selector("text=Logout", timeout=60000)
                     time.sleep(3)
 
-                if "dashboard_deviceListOnly.php" not in page.url or page.locator("text=Section wise summary").is_visible():
-                    open_correct_page(page, target_url)
-                else:
-                    page.reload(wait_until='networkidle', timeout=60000)
-                    time.sleep(5)
+                # Har screenshot se pehle hamesha open_correct_page() chalega
+                open_correct_page(page, target_url)
                 
-                # IST Date aur Time nikalna
                 now_ist = datetime.now(IST)
                 date_folder = now_ist.strftime('%Y-%m-%d')
                 time_str = now_ist.strftime('%H-%M-%S')
                 
-                # Datewise folder banana (e.g., 2026-10-21)
                 os.makedirs(date_folder, exist_ok=True)
-                
                 file_path = f"{date_folder}/screenshot_{time_str}.png"
-                page.screenshot(path=file_path, full_page=True)
-                print(f"[{i}/30] Screenshot saved: {file_path}")
                 
-                # 1. GitHub ke Datewise folder me push karna
+                page.screenshot(path=file_path, full_page=True)
+                print(f"[{i}/30] Saved: {file_path}")
+                
                 push_to_github(file_path)
                 
-                # 2. Telegram par photo aur exact time bhejna
                 caption = f"📊 RJK Device List\n📅 Date: {date_folder}\n⏰ Time: {now_ist.strftime('%I:%M:%S %p')}"
                 send_to_telegram(file_path, caption)
                 
                 if i < 30:
                     elapsed = time.time() - start_time
                     sleep_time = max(10, 120 - elapsed)
-                    print(f"Agla screenshot {int(sleep_time)} second baad...")
                     time.sleep(sleep_time)
                     
         except Exception as e:
