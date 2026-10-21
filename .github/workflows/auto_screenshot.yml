@@ -7,10 +7,17 @@ on:
 
 permissions:
   contents: write
+  actions: write
+
+# Ek samay par sirf ek hi workflow chalega, duplicate nahi honge
+concurrency:
+  group: screenshot-runner
+  cancel-in-progress: false
 
 jobs:
   take-screenshot:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -25,13 +32,11 @@ jobs:
           pip install -r requirements.txt
           playwright install chromium
 
-      - name: Run Python Script
+      - name: Run Continuous Screenshot Loop (1 Hour)
         run: python script.py
 
-      - name: Commit and Push Screenshots
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add *.png
-          git commit -m "Auto screenshots added" || exit 0
-          git push
+      - name: Auto-Trigger Next Run Immediately
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run auto_screenshot.yml || true
