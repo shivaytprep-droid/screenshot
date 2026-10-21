@@ -5,37 +5,33 @@ import requests
 from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 
-# ==========================================
-# APNA TELEGRAM BOT TOKEN AUR CHAT ID YAHAN DALEIN
-# ==========================================
-TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN"
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
+# GitHub Secrets ya Environment Variable se token aur chat id uthana
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "971307814")
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
 def send_to_telegram(file_path, caption):
-    if TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN" or not TELEGRAM_BOT_TOKEN:
-        print("Telegram Token set nahi hai, skip kar rahe hain...")
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN":
+        print("⚠️ Telegram Token set nahi hai ya empty hai! Secrets check karein.")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
     try:
         with open(file_path, 'rb') as photo:
             payload = {'chat_id': TELEGRAM_CHAT_ID, 'caption': caption}
             files = {'photo': photo}
-            r = requests.post(url, data=payload, files=files, timeout=30)
+            r = requests.post(url, data=payload, files=files, timeout=40)
             if r.status_code == 200:
-                print("Telegram par photo bhej di gayi!")
+                print("✅ Telegram par photo bhej di gayi!")
             else:
-                print(f"Telegram Error: {r.text}")
+                print(f"❌ Telegram API Error: Status {r.status_code} - {r.text}")
     except Exception as e:
-        print(f"Telegram fail: {e}")
+        print(f"❌ Telegram Request Failed: {e}")
 
 def open_correct_page(page, target_url):
-    # Har baar seedha target URL ya menu link open karna (Reload bilkul nahi karna)
     page.goto(target_url, wait_until='networkidle', timeout=60000)
     time.sleep(4)
 
-    # Agar abhi bhi Summary page par hai, to menu link ya JS se force open karo
     if page.locator("text=Section wise summary").is_visible():
         link = page.locator("a[href*='dashboard_deviceListOnly.php']")
         if link.count() > 0:
@@ -70,6 +66,8 @@ def push_to_github(file_path):
 
 def run():
     target_url = 'https://ip3.rilapp.com/railways/dashboard_deviceListOnly.php'
+    count = 1
+    
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(viewport={"width": 1920, "height": 1080})
@@ -90,9 +88,11 @@ def run():
             page.wait_for_load_state('networkidle', timeout=60000)
             time.sleep(3)
             
-            for i in range(1, 31):
+            # Unlimited Loop
+            while True:
                 start_time = time.time()
                 
+                # Agar session expire hokar login page wapas aa jaye
                 if page.locator('input[type="password"]').is_visible():
                     page.locator('input[type="text"]').first.fill('sserjk')
                     page.locator('input[type="password"]').first.fill('sserjk')
@@ -100,7 +100,6 @@ def run():
                     page.wait_for_selector("text=Logout", timeout=60000)
                     time.sleep(3)
 
-                # Har screenshot se pehle hamesha open_correct_page() chalega
                 open_correct_page(page, target_url)
                 
                 now_ist = datetime.now(IST)
@@ -111,20 +110,22 @@ def run():
                 file_path = f"{date_folder}/screenshot_{time_str}.png"
                 
                 page.screenshot(path=file_path, full_page=True)
-                print(f"[{i}/30] Saved: {file_path}")
+                print(f"[#{count}] Saved: {file_path}")
                 
                 push_to_github(file_path)
                 
                 caption = f"📊 RJK Device List\n📅 Date: {date_folder}\n⏰ Time: {now_ist.strftime('%I:%M:%S %p')}"
                 send_to_telegram(file_path, caption)
                 
-                if i < 30:
-                    elapsed = time.time() - start_time
-                    sleep_time = max(10, 120 - elapsed)
-                    time.sleep(sleep_time)
+                count += 1
+                
+                # 2 minute ka interval maintain karna
+                elapsed = time.time() - start_time
+                sleep_time = max(10, 120 - elapsed)
+                time.sleep(sleep_time)
                     
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Loop interrupted: {e}")
         finally:
             browser.close()
 
