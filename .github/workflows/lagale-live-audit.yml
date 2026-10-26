@@ -1,0 +1,31 @@
+name: Lagale Live URL Audit
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "25 2 * * 1"
+permissions:
+  contents: write
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Crawl live site and generate reports
+        run: python lagale-live-audit/scripts/live_audit.py --base https://lagale.in/ --max-pages 1600 --delay 0.25 --out reports
+      - name: Commit latest report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          git diff --cached --quiet || (git commit -m "Update Lagale live audit report" && git push)
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lagale-live-audit-report
+          path: reports/
+          if-no-files-found: warn
